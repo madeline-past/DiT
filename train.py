@@ -13,7 +13,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.datasets import ImageFolder
 from torchvision import transforms
@@ -29,8 +29,8 @@ import os
 
 from models import DiT_models
 from diffusion import create_diffusion
-from diffusers.models import AutoencoderKL
-
+# from diffusers.models import AutoencoderKL
+from phi_data import generate_data
 
 #################################################################################
 #                             Training Helper Functions                         #
@@ -103,6 +103,21 @@ def center_crop_arr(pil_image, image_size):
     return Image.fromarray(arr[crop_y: crop_y + image_size, crop_x: crop_x + image_size])
 
 
+class Phi_Dataset(Dataset):
+    def __init__(self, image_height, image_width, data_size):
+        self.image_height = image_height
+        self.image_width = image_width
+        self.data_size = data_size
+
+    def __len__(self):
+        return self.data_size
+
+    def __getitem__(self, idx):
+        image, cond = generate_data(idx, self.image_height, self.image_width)
+        # 返回一张原图和一张图片条件
+        return image, cond
+
+
 #################################################################################
 #                                  Training Loop                                #
 #################################################################################
@@ -137,31 +152,46 @@ def main(args):
         logger = create_logger(None)
 
     # Create model:
-    assert args.image_size % 8 == 0, "Image size must be divisible by 8 (for the VAE encoder)."
-    latent_size = args.image_size // 8
+    # assert args.image_size % 8 == 0, "Image size must be divisible by 8 (for the VAE encoder)."
+    # latent_size = args.image_size // 8
+
+    latent_size = (args.image_height, args.image_width)
     model = DiT_models[args.model](
         input_size=latent_size,
-        num_classes=args.num_classes
+        # num_classes=args.num_classes
     )
+
+    # Auto-download a pre-trained model or load a custom DiT checkpoint from train.py:
+    from download import find_model
+    if args.ckpt:
+        ckpt_path = args.ckpt
+        state_dict = find_model(ckpt_path)
+        model.load_state_dict(state_dict)
+
     # Note that parameter initialization is done within the DiT constructor
     ema = deepcopy(model).to(device)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
     model = DDP(model.to(device), device_ids=[rank])
+
+
     diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
-    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
+    # vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     opt = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0)
 
     # Setup data:
-    transform = transforms.Compose([
-        transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)
-    ])
-    dataset = ImageFolder(args.data_path, transform=transform)
+    # transform = transforms.Compose([
+    #     transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
+    #     transforms.RandomHorizontalFlip(),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)
+    # ])
+    # dataset = ImageFolder(args.data_path, transform=transform)
+
+    dataset = Phi_Dataset(args.image_height, args.image_width, args.train_data_size)
+
     sampler = DistributedSampler(
         dataset,
         num_replicas=dist.get_world_size(),
@@ -178,7 +208,8 @@ def main(args):
         pin_memory=True,
         drop_last=True
     )
-    logger.info(f"Dataset contains {len(dataset):,} images ({args.data_path})")
+    # logger.info(f"Dataset contains {len(dataset):,} images ({args.data_path})")
+    logger.info(f"Dataset contains {len(dataset):,} images")
 
     # Prepare models for training:
     update_ema(ema, model.module, decay=0)  # Ensure EMA is initialized with synced weights
@@ -198,9 +229,11 @@ def main(args):
         for x, y in loader:
             x = x.to(device)
             y = y.to(device)
-            with torch.no_grad():
-                # Map input images to latent space + normalize latents:
-                x = vae.encode(x).latent_dist.sample().mul_(0.18215)
+
+            # with torch.no_grad():
+            #     # Map input images to latent space + normalize latents:
+            #     x = vae.encode(x).latent_dist.sample().mul_(0.18215)
+
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
             model_kwargs = dict(y=y)
             loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
@@ -253,17 +286,22 @@ def main(args):
 if __name__ == "__main__":
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-path", type=str, required=True)
+    # parser.add_argument("--data-path", type=str, required=True)
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
-    parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
-    parser.add_argument("--num-classes", type=int, default=1000)
-    parser.add_argument("--epochs", type=int, default=1400)
-    parser.add_argument("--global-batch-size", type=int, default=256)
+    # parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
+    parser.add_argument("--image-height", type=int, default=400)
+    parser.add_argument("--image-width", type=int, default=480)
+    # parser.add_argument("--num-classes", type=int, default=1000)
+    parser.add_argument("--epochs", type=int, default=16)
+    parser.add_argument("--global-batch-size", type=int, default=64)
     parser.add_argument("--global-seed", type=int, default=0)
-    parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
+    # parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
-    parser.add_argument("--ckpt-every", type=int, default=50_000)
+    parser.add_argument("--ckpt-every", type=int, default=12_300)
+    parser.add_argument("--train-data-size", type=int, default=50_000)
+    parser.add_argument("--ckpt", type=str, default=None,
+                        help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
     args = parser.parse_args()
     main(args)
