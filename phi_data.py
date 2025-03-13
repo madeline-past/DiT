@@ -53,12 +53,12 @@ def generate_data(seed=None, height=400, width=480):
 
 
 
-# if '__name__' == '__main__':
-#     import matplotlib.pyplot as plt
-#     array = generate_data().numpy()
-#     # plt.figure(figsize=(5, 5))  # 设置图像尺寸
-#     plt.imshow(array)  # 使用Matplotlib显示NumPy数组
-#     plt.xlabel('distance')  # 添加X轴标签
-#     plt.ylabel('time')  # 添加Y轴标签
-#     plt.title('raw_data')  # 添加标题
-#     plt.show()  # 显示图像
+if '__name__' == '__main__':
+    import matplotlib.pyplot as plt
+    array = generate_data().numpy()
+    # plt.figure(figsize=(5, 5))  # 设置图像尺寸
+    plt.imshow(array)  # 使用Matplotlib显示NumPy数组
+    plt.xlabel('distance')  # 添加X轴标签
+    plt.ylabel('time')  # 添加Y轴标签
+    plt.title('raw_data')  # 添加标题
+    plt.show()  # 显示图像

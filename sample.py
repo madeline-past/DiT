@@ -21,6 +21,30 @@ import torch.nn.functional as F
 import math
 from time import time
 import os
+import matplotlib.pyplot as plt
+
+def save_img(x, img_name, dir):
+    array = x.permute(1,2,0).numpy()
+    # plt.figure(figsize=(50, 250))  # 设置图像尺寸
+    plt.imshow(array)  # 使用Matplotlib显示NumPy数组
+    # plt.xlabel('distance')  # 添加X轴标签
+    # plt.ylabel('time')  # 添加Y轴标签
+    plt.axis('off')     # 关闭坐标轴
+    # plt.title(img_name)  # 添加标题
+    filename = img_name + '.png'
+    plt.savefig(os.path.join(dir, filename), dpi=300, transparent=True)
+
+
+def psnr(x1, x2):
+    assert x1.shape == x2.shape
+    mse = torch.sum((x1 - x2) ** 2) / (x1.numel())
+    # max_ = torch.cat([torch.max(x1), torch.max(x2)], dim=0)
+    max = torch.max(torch.max(x1), torch.max(x2))
+    print("max:", max)
+    psnr = 10 * torch.log(max ** 2 / mse) / torch.log(torch.tensor(10))
+    print("PSNR:", psnr)
+    return psnr
+
 
 def main(args, data=None):
     start_time = str(int(time()))
@@ -72,13 +96,19 @@ def main(args, data=None):
 
 
     if data is None:
-        data = generate_data(height = args.image_height, width = args.image_width)[1]
+        gt, data = generate_data(height = args.image_height, width = args.image_width)
     if not isinstance(data, torch.Tensor):
         data = torch.tensor(data)
-    _dir = os.path.join(dir, "input.png") 
-    save_image(data, _dir, nrow=1, normalize=True, value_range=(-1, 1))
     C, H, W = data.shape
     assert C == 1
+    _dir = os.path.join(dir, "input.png")
+
+    # green_data = torch.zeros(3, H, W)
+    # green_data[1] = data    # 写入绿色通道
+    # save_image(green_data, _dir, nrow=1, normalize=True, value_range=(-1, 1))
+    # save_image(data, _dir, nrow=1)
+    save_img(data, "input_by_plt", dir)
+
     data = data.squeeze(0)
     rows = math.ceil(H / model_height)
     cols = math.ceil(W / model_width)
@@ -158,17 +188,28 @@ def main(args, data=None):
     assert output.shape == data.shape
 
     output_ = output.unsqueeze(0)
+    # green_output = torch.zeros(3, H, W)
+    # green_output[1] = output_    # 写入绿色通道
     _dir = os.path.join(dir, "output.png") 
-    save_image(output_, _dir, nrow=1, normalize=True, value_range=(-1, 1))
+    # save_image(green_output, _dir, nrow=1, normalize=True, value_range=(-1, 1))
+    # save_image(output_, _dir, nrow=1, normalize=True, value_range=(-1, 1))
+    # save_image(output_, _dir, nrow=1)
+    save_img(output_, "output_by_plt", dir)
 
+    gt = gt.squeeze(0)
+    print("去噪前的PSNR:", psnr(data, gt).data)
+    print("去噪后的PSNR:", psnr(output, gt).data)
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
     # parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="mse")
     # parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
-    parser.add_argument("--image-height", type=int, default=500)
-    parser.add_argument("--image-width", type=int, default=2500)
+    # parser.add_argument("--image-height", type=int, default=500)
+    # parser.add_argument("--image-width", type=int, default=2500)
+    parser.add_argument("--image-height", type=int, default=400)
+    parser.add_argument("--image-width", type=int, default=480)
     # parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
