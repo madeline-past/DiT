@@ -12,15 +12,20 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 from torchvision.utils import save_image
 from diffusion import create_diffusion
-from diffusers.models import AutoencoderKL
+# from diffusers.models import AutoencoderKL
 from download import find_model
 from models import DiT_models
 import argparse
 from phi_data import generate_data
 import torch.nn.functional as F
 import math
+from time import time
+import os
 
 def main(args, data=None):
+    start_time = str(int(time()))
+    dir = os.path.join('pictures', '400*2400', start_time) 
+    os.makedirs(dir)
     # Setup PyTorch:
     torch.manual_seed(args.seed)
     torch.set_grad_enabled(False)
@@ -70,7 +75,8 @@ def main(args, data=None):
         data = generate_data(height = args.image_height, width = args.image_width)[1]
     if not isinstance(data, torch.Tensor):
         data = torch.tensor(data)
-    save_image(data, "sample_input.png", nrow=1, normalize=True, value_range=(-1, 1))
+    _dir = os.path.join(dir, "input.png") 
+    save_image(data, _dir, nrow=1, normalize=True, value_range=(-1, 1))
     C, H, W = data.shape
     assert C == 1
     data = data.squeeze(0)
@@ -90,7 +96,8 @@ def main(args, data=None):
             sub_matrix = pad_data[i:i+sub_rows, j:j+sub_cols]
             sub_data.append(sub_matrix.unsqueeze(0))
     stack_data = torch.stack(sub_data, dim=0).to(device)   #(n, 1, model_height, model_width)
-    save_image(stack_data, "sample_stack_input.png", nrow=cols, normalize=True, value_range=(-1, 1))
+    _dir = os.path.join(dir, "stack_input.png") 
+    save_image(stack_data, _dir, nrow=cols, normalize=True, value_range=(-1, 1))
     z = torch.randn(n, 1, model_height, model_width, device=device)
 
 
@@ -127,7 +134,8 @@ def main(args, data=None):
     )
 
     # Save and display images:
-    save_image(samples, "sample_stack_output.png", nrow=cols, normalize=True, value_range=(-1, 1))
+    _dir = os.path.join(dir, "stack_output.png") 
+    save_image(samples, _dir, nrow=cols, normalize=True, value_range=(-1, 1))
 
     assert samples.shape == stack_data.shape
     samples = samples.squeeze(1)
@@ -141,7 +149,8 @@ def main(args, data=None):
     assert output.shape == data.shape
 
     output_ = output.unsqueeze(0)
-    save_image(output_, "sample_output.png", nrow=1, normalize=True, value_range=(-1, 1))
+    _dir = os.path.join(dir, "output.png") 
+    save_image(output_, _dir, nrow=1, normalize=True, value_range=(-1, 1))
 
 
 if __name__ == "__main__":
