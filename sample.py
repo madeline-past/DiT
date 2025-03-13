@@ -87,7 +87,16 @@ def main(args, data=None):
     patch_size = latent_size
     pad_h = (patch_size[0] - H % patch_size[0]) % patch_size[0]
     pad_w = (patch_size[1] - W % patch_size[1]) % patch_size[1]
-    pad_data = F.pad(data, (0, pad_w, 0, pad_h))
+    zero_pad = False
+    if zero_pad:
+        pad_data = F.pad(data, (0, pad_w, 0, pad_h))    #(H + pad_h, W + pad_w)
+    else:
+        pad_data = torch.zeros(H + pad_h, W + pad_w)
+        w_pad_data = F.pad(data, (0, pad_w, 0, 0))    #(H, W + pad_w)
+        pad_data[0:H, 0:W + pad_w] = w_pad_data
+        # flip pad
+        for i in range(pad_h):
+            pad_data[H + i] = pad_data[H - i - 1]
 
     sub_data = []
     sub_rows, sub_cols = patch_size
