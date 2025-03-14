@@ -60,11 +60,12 @@ def main(args, data=None):
     torch.set_grad_enabled(False)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    if args.ckpt is None:
-        assert args.model == "DiT-XL/2", "Only DiT-XL/2 models are available for auto-download."
-        assert args.image_size in [256, 512]
-        assert args.num_classes == 1000
+    # if args.ckpt is None:
+    #     assert args.model == "DiT-XL/2", "Only DiT-XL/2 models are available for auto-download."
+    #     assert args.image_size in [256, 512]
+    #     assert args.num_classes == 1000
 
+    assert args.model == "DiT-S/8", "Only DiT-S/8 models are available."
     # Load model:
     # latent_size = args.image_size // 8
     # latent_size = (args.image_height, args.image_width)
@@ -229,7 +230,7 @@ def main(args, data=None):
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
+    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-S/8")
     # parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="mse")
     # parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     # parser.add_argument("--image-height", type=int, default=500)
@@ -237,11 +238,11 @@ if __name__ == "__main__":
     parser.add_argument("--image-height", type=int, default=400)
     parser.add_argument("--image-width", type=int, default=480)
     # parser.add_argument("--num-classes", type=int, default=1000)
-    parser.add_argument("--cfg-scale", type=float, default=4.0)
+    # parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ckpt", type=str, default=None,
-                        help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
+                        help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-S/8 model).")
     args = parser.parse_args()
     data = None
     main(args, data)

@@ -18,6 +18,7 @@ Special thanks to [DiT](https://github.com/facebookresearch/DiT), which is used 
 3. Since we treat the target to-be-denoised image as a condition in the diffusion process, we simply concat the patified image with gaussian noise, and throw it into DiT.
 4. We train a model that takes as input an 400\*480\*1 image, but we support arbitrary shape of images to denoise. Specifically, we cut and pad input images into several 400\*480 images, then feed them into our model.
 5. We do not use classifier-free guidance, since our model just perfroms great without CFG.
+6. Additionally, we have made a small modification to `patch_embed.py` within module `timm`. We have put our modified version of `patch_embed.py` in our repo, and now you can replace the original one with ours!
 
 
 ## Setup
