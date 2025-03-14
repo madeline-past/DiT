@@ -1,4 +1,4 @@
-## Scalable Diffusion Models with Transformers (DiT)<br><sub>Official PyTorch Implementation</sub>
+## Fiber Optic Sensing with DiT<br><sub>Official PyTorch Implementation</sub>
 
 ![input](visuals/input.png)
 
