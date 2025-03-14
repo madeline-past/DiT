@@ -22,6 +22,7 @@ import math
 from time import time
 import os
 import matplotlib.pyplot as plt
+import json
 
 def save_img(x, img_name, dir):
     array = x.permute(1,2,0).numpy()
@@ -40,16 +41,20 @@ def psnr(x1, x2):
     mse = torch.sum((x1 - x2) ** 2) / (x1.numel())
     # max_ = torch.cat([torch.max(x1), torch.max(x2)], dim=0)
     max = torch.max(torch.max(x1), torch.max(x2))
+    min = torch.min(torch.min(x1), torch.min(x2))
     print("max:", max)
-    psnr = 10 * torch.log(max ** 2 / mse) / torch.log(torch.tensor(10))
-    print("PSNR:", psnr)
+    print("min:", min)
+    psnr = 10 * torch.log((max - min) ** 2 / mse) / torch.log(torch.tensor(10))
+    # print("PSNR:", psnr)
     return psnr
 
 
 def main(args, data=None):
     start_time = str(int(time()))
     dir = os.path.join('pictures', '400*2400', start_time) 
+    dir_eval = os.path.join('result_for_eval', start_time) 
     os.makedirs(dir)
+    os.makedirs(dir_eval)
     # Setup PyTorch:
     torch.manual_seed(args.seed)
     torch.set_grad_enabled(False)
@@ -96,7 +101,7 @@ def main(args, data=None):
 
 
     if data is None:
-        gt, data = generate_data(height = args.image_height, width = args.image_width)
+        gt, data, params = generate_data(height = args.image_height, width = args.image_width)
     if not isinstance(data, torch.Tensor):
         data = torch.tensor(data)
     C, H, W = data.shape
@@ -107,7 +112,7 @@ def main(args, data=None):
     # green_data[1] = data    # 写入绿色通道
     # save_image(green_data, _dir, nrow=1, normalize=True, value_range=(-1, 1))
     # save_image(data, _dir, nrow=1)
-    save_img(data, "input_by_plt", dir)
+    save_img(data, "input", dir_eval)
 
     data = data.squeeze(0)
     rows = math.ceil(H / model_height)
@@ -194,13 +199,34 @@ def main(args, data=None):
     # save_image(green_output, _dir, nrow=1, normalize=True, value_range=(-1, 1))
     # save_image(output_, _dir, nrow=1, normalize=True, value_range=(-1, 1))
     # save_image(output_, _dir, nrow=1)
-    save_img(output_, "output_by_plt", dir)
+    # save_img(output_, "output_by_plt", dir)
+    save_img(output_, "output", dir_eval)
 
     gt = gt.squeeze(0)
-    print("去噪前的PSNR:", psnr(data, gt).data)
-    print("去噪后的PSNR:", psnr(output, gt).data)
-    
+    print("去噪前的PSNR:", psnr(data, gt))
+    print("去噪后的PSNR:", psnr(output, gt))
 
+    def max_col(x):
+        # x: 2D
+        sum = torch.sum(torch.abs(x), dim=0)
+        idx = torch.argmax(sum)
+        print(f"正弦波动最大所在是第{idx}列")
+        return x[:, gt_idx]
+
+    sum = torch.sum(torch.abs(gt), dim=0)
+    # print(f"gt sum:\n{sum}")
+    gt_idx = torch.argmax(sum)
+    print(f"ground truth中正弦波动最大所在是第{gt_idx}列")
+
+    text = f"\n去噪前数据的正弦波动最大的那一列的数据如下:\n{max_col(data)}\n去噪后数据的正弦波动最大的那一列的数据如下:\n{max_col(output)}"
+    # print("去噪前数据的正弦波动最大的那一列的数据如下:\n", max_col(data))
+    # print("去噪后数据的正弦波动最大的那一列的数据如下:\n", max_col(output))
+    textfile = os.path.join(dir_eval, 'data.txt')
+    with open(textfile, "w") as f:
+        f.write(json.dumps(params))
+        f.write(text)
+
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")

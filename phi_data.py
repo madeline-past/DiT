@@ -10,11 +10,25 @@ def generate_data(seed=None, height=400, width=480):
         torch.manual_seed(seed)
 
     # 添加随机性的参数
-    omiga = 2 * math.pi / (height/10) * random.uniform(0.7, 1.3)  # ±30%波动
+    # omiga = 2 * math.pi / (height/7) * random.uniform(0.9, 1.1)  # ±10%波动
+    omiga = 2 * math.pi / (height/7)
+    T = 2 * math.pi / omiga
+    freq = 1 / T
     # amplitude = 1 * random.uniform(0.1, 1)                        # 0.1到1
-    amplitude = 0.2
+    amplitude = 1
     phi = random.uniform(0, 2 * math.pi)                            # 0到2π随机取值
-    pivot = random.randint(0, width-1)
+    # pivot = random.randint(0, width-1)
+    pivot = int(3 * width / 5)
+
+    params = {
+        'omiga':omiga,
+        'T':T,
+        'freq':freq,
+        'amplitude':amplitude,
+        'phi':phi,
+        'pivot':pivot,
+        'seed':seed
+    }
 
     # 时间维上按正弦规律变化的相位大小
     key = torch.sin(torch.arange(0, height).float() * omiga + phi) * amplitude
@@ -48,7 +62,7 @@ def generate_data(seed=None, height=400, width=480):
     raw_data = noise + feat_pad
     # 这里feat_pad相当于没有任何噪音的ground_truth，raw_data是生图过程中提供的图片条件
     # return feat_pad, raw_data
-    return feat_pad.unsqueeze(0), raw_data.unsqueeze(0)
+    return feat_pad.unsqueeze(0), raw_data.unsqueeze(0), params
 
 
 
